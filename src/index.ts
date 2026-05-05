@@ -9,7 +9,7 @@ import {
 	HassEntities,
 } from 'home-assistant-js-websocket'
 import { GetActionsList } from './actions.js'
-import { type DeviceConfig, DeviceSecrets, GetConfigFields } from './config.js'
+import { type DeviceConfig, DeviceSecrets, GetConfigFields, type LastFilterCounts } from './config.js'
 import { GetFeedbacksList } from './feedback.js'
 import { createSocket, hassErrorToString } from './hass-socket.js'
 import { GetPresetsList } from './presets.js'
@@ -21,6 +21,7 @@ import { HassEntitiesWithChanges, entitiesColl } from './hass/entities.js'
 import { EntitySubscriptions } from './state.js'
 import debounceFn from 'debounce-fn'
 import type { HassSchema } from './schema.js'
+import { compileFilter, computeFilterBreakdown, type EntityFilter } from './filter.js'
 
 const RECONNECT_INTERVAL = 5000
 
@@ -42,6 +43,10 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 
 	private pendingState: HassEntitiesWithChanges | undefined
 
+	private entityFilter: EntityFilter = () => false
+	private exposeAttributes = false
+	private lastFilterCounts: LastFilterCounts | undefined
+
 	constructor(internal: unknown) {
 		super(internal)
 
@@ -62,8 +67,8 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 	public async init(config: DeviceConfig, _isFirst: boolean, secrets: DeviceSecrets): Promise<void> {
 		await this.configUpdated(config, secrets)
 
-		InitVariables(this, this.state)
-		this.setPresetDefinitions(...GetPresetsList(this.state))
+		this.applyVariableDefinitions()
+		this.setPresetDefinitions(...GetPresetsList(this.filteredState()))
 		this.setFeedbackDefinitions(GetFeedbacksList(this.state, () => this.stateObj, this.entitySubscriptions))
 		this.setActionDefinitions(
 			GetActionsList(() => ({ state: this.state, services: this.services, client: this.client })),
@@ -77,6 +82,9 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 	public async configUpdated(config: DeviceConfig, secrets: DeviceSecrets): Promise<void> {
 		this.config = config
 		this.secrets = secrets
+
+		this.entityFilter = compileFilter(config)
+		this.exposeAttributes = !!config.expose_attributes
 
 		if (this.connecting) {
 			this.needsReconnect = true
@@ -115,7 +123,7 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 	 * Creates the configuration fields for web config.
 	 */
 	public getConfigFields(): SomeCompanionConfigField[] {
-		return GetConfigFields()
+		return GetConfigFields(this.state, this.lastFilterCounts)
 	}
 
 	/**
@@ -294,15 +302,15 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 			const entitiesChanged =
 				newState.added.size > 0 || newState.removed.size > 0 || newState.friendlyNameChange.size > 0
 			if (entitiesChanged) {
-				this.setPresetDefinitions(...GetPresetsList(this.state))
+				this.setPresetDefinitions(...GetPresetsList(this.filteredState()))
 				this.setFeedbackDefinitions(GetFeedbacksList(this.state, () => this.stateObj, this.entitySubscriptions))
 				this.setActionDefinitions(
 					GetActionsList(() => ({ state: this.state, client: this.client, services: this.services })),
 				)
-				InitVariables(this, this.state)
+				this.applyVariableDefinitions()
 			}
 
-			updateVariables(this, newState)
+			updateVariables(this, newState, this.entityFilter, this.exposeAttributes)
 
 			this.#checkAffectedFeedbacks(newState)
 		},
@@ -342,5 +350,37 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 		this.setActionDefinitions(
 			GetActionsList(() => ({ state: this.state, client: this.client, services: this.services })),
 		)
+	}
+
+	private filteredState(): HassEntity[] {
+		return this.state.filter((e) => this.entityFilter(e.entity_id))
+	}
+
+	private applyVariableDefinitions(): void {
+		const breakdown = computeFilterBreakdown(this.state, this.config)
+		const counts = InitVariables(this, this.state, this.entityFilter, this.exposeAttributes)
+		this.lastFilterCounts = {
+			entitiesMatched: counts.entitiesMatched,
+			variablesCount: counts.variablesCount,
+			exposeAttributes: this.exposeAttributes,
+			breakdown,
+		}
+
+		const summary = [
+			`HA filter applied:`,
+			`  total entities:         ${breakdown.totalCount}`,
+			`  after domains:          ${breakdown.afterDomains}`,
+			`  after include patterns: ${breakdown.afterIncludes}`,
+			`  after exclude patterns: ${breakdown.afterExcludes}`,
+			`  variables registered:   ${counts.variablesCount} (attrs ${this.exposeAttributes ? 'on' : 'off'})`,
+		].join('\n')
+		this.log('info', summary)
+
+		if (this.state.length > 0) {
+			this.updateStatus(
+				InstanceStatus.Ok,
+				`${counts.entitiesMatched}/${this.state.length} entities, ${counts.variablesCount} vars`,
+			)
+		}
 	}
 }
