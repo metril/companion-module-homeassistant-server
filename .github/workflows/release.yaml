@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and attach to release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+
+      - name: Build module bundle
+        env:
+          CI: true
+        run: |
+          corepack enable
+          yarn install
+          yarn dist
+
+      - name: Create or update release with bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          BUNDLE=$(ls homeassistant-server-*.tgz | head -n 1)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$BUNDLE" --clobber
+          else
+            gh release create "$TAG" "$BUNDLE" --title "$TAG" --generate-notes
+          fi
