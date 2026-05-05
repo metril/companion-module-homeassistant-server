@@ -310,7 +310,9 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 				this.applyVariableDefinitions()
 			}
 
-			updateVariables(this, newState, this.entityFilter, this.exposeAttributes)
+			if (this.config.enable_variables !== false) {
+				updateVariables(this, newState, this.entityFilter, this.exposeAttributes)
+			}
 
 			this.#checkAffectedFeedbacks(newState)
 		},
@@ -357,6 +359,16 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 	}
 
 	private applyVariableDefinitions(): void {
+		if (this.config.enable_variables === false) {
+			this.setVariableDefinitions({})
+			this.lastFilterCounts = undefined
+			this.log('info', 'HA variables disabled — feedbacks/actions/presets still active.')
+			if (this.state.length > 0) {
+				this.updateStatus(InstanceStatus.Ok, 'Variables disabled')
+			}
+			return
+		}
+
 		const breakdown = computeFilterBreakdown(this.state, this.config)
 		const counts = InitVariables(this, this.state, this.entityFilter, this.exposeAttributes)
 		this.lastFilterCounts = {

@@ -134,6 +134,15 @@ export function compileFilter(config: DeviceConfig): EntityFilter {
 	}
 }
 
+export function perDomainCountsFromState(state: HassEntity[]): Record<string, number> {
+	const counts: Record<string, number> = {}
+	for (const entity of state) {
+		const domain = entityDomain(entity.entity_id)
+		counts[domain] = (counts[domain] ?? 0) + 1
+	}
+	return counts
+}
+
 export function computeFilterBreakdown(state: HassEntity[], config: DeviceConfig): FilterBreakdown {
 	const domainSet = new Set(config.include_domains ?? [])
 	const includes = compileGlobList(config.include_patterns)

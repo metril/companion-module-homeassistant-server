@@ -66,8 +66,27 @@ const AddFilterDefaults: CompanionStaticUpgradeScript<DeviceConfig, DeviceSecret
 	return result
 }
 
+const EnableVariablesDefault: CompanionStaticUpgradeScript<DeviceConfig, DeviceSecrets> = (_context, props) => {
+	const result: CompanionStaticUpgradeResult<DeviceConfig, DeviceSecrets> = {
+		updatedConfig: null,
+		updatedSecrets: null,
+		updatedActions: [],
+		updatedFeedbacks: [],
+	}
+
+	if (props.config && props.config.enable_variables === undefined) {
+		result.updatedConfig = {
+			...props.config,
+			enable_variables: true,
+		}
+	}
+
+	return result
+}
+
 export const UpgradeScripts: CompanionStaticUpgradeScript<DeviceConfig, DeviceSecrets>[] = [
 	CreateConvertToBooleanFeedbackUpgradeScript(BooleanFeedbackUpgradeMap),
 	MoveAccessTokenToSecrets,
 	AddFilterDefaults,
+	EnableVariablesDefault,
 ]
