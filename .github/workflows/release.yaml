@@ -28,6 +28,7 @@ jobs:
         run: |
           corepack enable
           yarn install
+          yarn build
           yarn dist
 
       - name: Create or update release with bundle
