@@ -131,10 +131,16 @@ function processEvent(store: Store<HassEntitiesWithChanges>, updates: StatesUpda
 	store.setState(myNewState, true)
 }
 
-const subscribeUpdates = async (conn: Connection, store: Store<HassEntitiesWithChanges>) =>
-	conn.subscribeMessage<StatesUpdates>((ev) => processEvent(store, ev), {
-		type: 'subscribe_entities',
-	})
+/**
+ * HA's subscribe_entities accepts an optional `entity_ids` list (HA 2022.4+) to only stream those entities.
+ * Note: an empty list may be treated as "all" by HA, so callers must never pass an empty list.
+ */
+const subscribeUpdates =
+	(entityIds: string[] | undefined) => async (conn: Connection, store: Store<HassEntitiesWithChanges>) =>
+		conn.subscribeMessage<StatesUpdates>((ev) => processEvent(store, ev), {
+			type: 'subscribe_entities',
+			...(entityIds ? { entity_ids: entityIds } : {}),
+		})
 
 function legacyProcessEvent(store: Store<HassEntitiesWithChanges>, event: StateChangedEvent) {
 	const state = store.state
@@ -199,9 +205,16 @@ export interface HassEntitiesWithChanges {
 	contentChanged: Set<string>
 }
 
-export const entitiesColl = (conn: Connection): Collection<HassEntitiesWithChanges> =>
+let subscriptionCounter = 0
+
+/**
+ * Entity collection. With `entityIds`, only those entities are streamed from HA.
+ * Each filtered call creates a fresh collection (the library caches collections by key), so callers
+ * resubscribe by creating a new one, and then unsubscribing the old.
+ */
+export const entitiesColl = (conn: Connection, entityIds?: string[]): Collection<HassEntitiesWithChanges> =>
 	atLeastHaVersion(conn.haVersion, 2022, 4, 0)
-		? getCollection(conn, '_ent', undefined, subscribeUpdates)
+		? getCollection(conn, entityIds ? `_ent_f${++subscriptionCounter}` : '_ent', undefined, subscribeUpdates(entityIds))
 		: getCollection(conn, '_ent', legacyFetchEntities, legacySubscribeUpdates)
 
 // export const subscribeEntities = (conn: Connection, onChange: (state: HassEntities) => void): UnsubscribeFunc =>

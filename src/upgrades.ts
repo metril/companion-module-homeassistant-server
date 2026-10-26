@@ -84,9 +84,34 @@ const EnableVariablesDefault: CompanionStaticUpgradeScript<DeviceConfig, DeviceS
 	return result
 }
 
+const AddRegistryFilterDefaults: CompanionStaticUpgradeScript<DeviceConfig, DeviceSecrets> = (_context, props) => {
+	const result: CompanionStaticUpgradeResult<DeviceConfig, DeviceSecrets> = {
+		updatedConfig: null,
+		updatedSecrets: null,
+		updatedActions: [],
+		updatedFeedbacks: [],
+	}
+
+	if (props.config && props.config.include_labels === undefined) {
+		// Empty lists = no label/area/floor filtering, so existing configs behave as before
+		result.updatedConfig = {
+			...props.config,
+			include_labels: [],
+			include_areas: [],
+			include_floors: [],
+			exclude_labels: [],
+			exclude_areas: [],
+			exclude_floors: [],
+		}
+	}
+
+	return result
+}
+
 export const UpgradeScripts: CompanionStaticUpgradeScript<DeviceConfig, DeviceSecrets>[] = [
 	CreateConvertToBooleanFeedbackUpgradeScript(BooleanFeedbackUpgradeMap),
 	MoveAccessTokenToSecrets,
 	AddFilterDefaults,
 	EnableVariablesDefault,
+	AddRegistryFilterDefaults,
 ]

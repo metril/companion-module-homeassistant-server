@@ -12,6 +12,13 @@ const customConfig = [
 			'n/no-missing-import': 'off',
 		},
 	},
+
+	{
+		files: ['**/*.spec.ts', 'vitest.config.mjs'],
+		rules: {
+			'n/no-unpublished-import': 'off',
+		},
+	},
 ]
 
 export default customConfig
