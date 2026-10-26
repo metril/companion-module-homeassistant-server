@@ -10,6 +10,28 @@ While developing the module, by using `yarn dev` the compiler will be run in wat
 
 ## Changes
 
+### v3.0.0
+
+**Breaking: requires Companion 5.1+ (Module API 2.2)**
+
+- Action results: `Call Service` can return the service response (`return_response`) to a variable
+- Call Service targets entities, areas, floors, labels or devices
+- Value feedbacks usable in expressions: entity state/attribute, comparisons, light brightness/colour, cover/valve position, climate temperatures, media player state/title, number value
+- New light colour action (kelvin, RGB, hue/saturation) and a feedback to colour a button from a light
+- New domains: cover, climate, media_player, lock, fan, valve, number/input_number, select
+- Entities are filtered in Home Assistant: only matching entities are subscribed, with new label, area and floor include/exclude filters
+- Errors from Home Assistant now fail the action instead of being ignored
+- Preset notes, and existing buttons are upgraded automatically
+
+### v2.2.0
+
+- Master toggle for exposing entities as variables, structured config dialog header
+
+### v2.1.0
+
+- Filter Companion variables by domain, name pattern and attributes, to avoid freezes on large Home Assistant installs
+- Release bundle is attached to GitHub releases
+
 ### v2.0.3
 
 - Fix bad merge
