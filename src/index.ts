@@ -54,7 +54,8 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 	private entitySubscriptions = new EntitySubscriptions()
 	private client: Connection | undefined
 	private connecting: boolean
-	private unsubscribeEntities: UnsubscribeFunc | undefined
+	private activeUnsub: UnsubscribeFunc | undefined
+	private pendingUnsub: UnsubscribeFunc | undefined
 	private unsubscribeServices: UnsubscribeFunc | undefined
 
 	private pendingState: HassEntitiesWithChanges | undefined
@@ -155,6 +156,7 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 
 		// Re-init the subscriptions
 		this.entitySubscriptions.clear()
+		this.subscribeActions()
 		this.checkAllFeedbacks()
 	}
 
@@ -242,6 +244,7 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 					this.client = undefined
 					this.updateStatus(InstanceStatus.ConnectionFailure, 'Reconnect failed')
 					this.log('info', `Reconnect failed`)
+					this.#stopEntities()
 					try {
 						connection.close()
 					} catch (_e) {
@@ -252,6 +255,7 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 
 				this.registries.start(connection)
 				this.unsubscribeServices = subscribeServices(connection, this.processServicesChange.bind(this))
+				this.#stopEntities()
 				this.#startEntities(connection)
 			})
 			.catch((e) => {
@@ -421,8 +425,10 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 	#stopEntities(): void {
 		this.unsubscribeIndex?.()
 		this.unsubscribeIndex = undefined
-		this.unsubscribeEntities?.()
-		this.unsubscribeEntities = undefined
+		this.activeUnsub?.()
+		this.activeUnsub = undefined
+		this.pendingUnsub?.()
+		this.pendingUnsub = undefined
 		this.subscribedKey = undefined
 		this.activeEntitySub = undefined
 		this.pendingEntitySub = undefined
@@ -433,12 +439,12 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 	#startEntities(conn: Connection): void {
 		// Server-side entity_ids needs HA 2022.4+ (the legacy path streams every state_changed event)
 		const filterInHa = hasAnyFilter(this.config) && atLeastHaVersion(conn.haVersion, 2022, 4, 0)
+		this.registries.setDeviceOwners('filter:', filterInHa && hasTaxonomyFilter(this.config) ? ['config'] : [])
 		if (!filterInHa) {
 			this.#applySubscription(conn, undefined)
 			return
 		}
 
-		if (hasTaxonomyFilter(this.config)) this.registries.setDeviceOwners('filter:', ['config'])
 		this.unsubscribeIndex = entityIndexColl(conn).subscribe((index) => {
 			this.entityIndex = index
 			if (!index.ok)
@@ -498,11 +504,12 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 		if (key === this.subscribedKey) return
 		this.subscribedKey = key
 
-		const previousUnsub = this.unsubscribeEntities
+		// A pending subscription which never delivered is superseded
+		this.pendingUnsub?.()
 		const sub = {}
 		this.pendingEntitySub = sub
 
-		this.unsubscribeEntities = entitiesColl(conn, wanted).subscribe((ev) => {
+		this.pendingUnsub = entitiesColl(conn, wanted).subscribe((ev) => {
 			if (this.pendingEntitySub === sub) {
 				// First state of this subscription: anything we had which is not in it has been removed
 				this.pendingEntitySub = undefined
@@ -511,7 +518,11 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 				for (const id of Object.keys(current)) {
 					if (!(id in ev.entities)) ev.removed.add(id)
 				}
-				previousUnsub?.()
+				// Promote the pending subscription, dropping the previously active one
+				const old = this.activeUnsub
+				this.activeUnsub = this.pendingUnsub
+				this.pendingUnsub = undefined
+				old?.()
 			} else if (this.activeEntitySub !== sub) {
 				return
 			}
