@@ -39,6 +39,9 @@ export interface DomainContext {
 	subs: EntitySubscriptions
 }
 
+/** Result of an action: what was called, and on which entities */
+export type ActionResult = { service: string; entity_id: string[] }
+
 export type PresetsResult = [CompanionPresetSection[], CompanionPresetDefinitions<HassSchema>]
 
 export interface DomainDefinition<

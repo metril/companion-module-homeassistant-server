@@ -35,13 +35,19 @@ function trackActionEntities(ctx: DomainContext, defs: Record<string, any>): voi
 	for (const def of Object.values(defs)) {
 		if (!def || !Array.isArray(def.options) || !def.options.some((o: { id: string }) => o.id === 'entity_id')) continue
 
-		def.optionsToMonitorForSubscribe = ['entity_id']
+		def.optionsToMonitorForSubscribe = ['entity_id', 'target_type']
+		def.skipUnsubscribeOnOptionsChange = true
 		def.subscribe = (action: { id: string; actionId: string; options: Record<string, unknown> }) => {
 			const ids = entityIdsOf(action.options.entity_id)
 			if (ids.length > 0) ctx.subs.subscribe(ids, action.id, `action:${action.actionId}`)
 			else ctx.subs.unsubscribe(undefined, action.id)
+			// The device registry is only loaded while an action targets devices
+			ctx.getRegistries().requireDevices(`action:${action.id}`, action.options.target_type === 'device')
 		}
-		def.unsubscribe = (action: { id: string }) => ctx.subs.unsubscribe(undefined, action.id)
+		def.unsubscribe = (action: { id: string }) => {
+			ctx.subs.unsubscribe(undefined, action.id)
+			ctx.getRegistries().requireDevices(`action:${action.id}`, false)
+		}
 	}
 }
 

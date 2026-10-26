@@ -1,36 +1,59 @@
-import type { HassServiceTarget } from 'home-assistant-js-websocket'
-import type { DropdownChoice } from '@companion-module/base'
-import { EntityMultiplePicker } from '../choices.js'
+import type { JsonValue } from '@companion-module/base'
+import { AttributePicker, ComparisonPicker, EntityPicker, TargetPicker, type Comparison } from '../choices.js'
+import { compareValues, readValue } from '../hass/compare.js'
 import { invokeService } from '../hass/service.js'
+import { buildTarget, resolveReturnResponse } from '../hass/targets.js'
+import { subscribeEntityPicker, unsubscribeEntityPicker } from './helpers.js'
 import { defineDomain } from './types.js'
 
 export type GenericActions = {
-	call_service: { options: { entity_id: string[]; service: string; payload: string } }
+	call_service: {
+		options: {
+			entity_id: string[]
+			target_type: string
+			target_area: string[]
+			target_device: string[]
+			target_floor: string[]
+			target_label: string[]
+			service: string
+			payload: string
+			return_response: boolean
+		}
+		result: JsonValue
+	}
 }
 
-export const genericDomain = defineDomain<GenericActions>({
+export type GenericFeedbacks = {
+	entity_state_value: { type: 'value'; options: { entity_id: string; attribute: string }; result: JsonValue }
+	entity_compare: {
+		type: 'value'
+		options: { entity_id: string; attribute: string; comparison: Comparison; value: string }
+		result: boolean
+	}
+}
+
+export const genericDomain = defineDomain<GenericActions, GenericFeedbacks>({
 	id: 'generic',
 	alwaysRegister: true,
 	actions: (ctx) => {
-		const initialServices = ctx.getServices()
+		const services = ctx.getServices()
+		const registries = ctx.getRegistries()
 
-		const serviceChoices: DropdownChoice[] = []
-		for (const [domain, services] of Object.entries(initialServices)) {
-			for (const [service, props] of Object.entries(services)) {
-				const id = `${domain}.${service}`
-				serviceChoices.push({
-					id: id,
-					label: props.name ? `${domain}: ${props.name}` : id,
-				})
-			}
-		}
+		const serviceChoices = Object.entries(services).flatMap(([domain, domainServices]) =>
+			Object.entries(domainServices).map(([service, props]) => ({
+				id: `${domain}.${service}`,
+				label: props.name ? `${domain}: ${props.name}` : `${domain}.${service}`,
+			})),
+		)
 
 		return {
 			call_service: {
 				name: 'Call Service',
-				description: 'Please open a feature request, so that useful things are properly supported',
+				description: 'Call any Home Assistant service on entities, areas, floors, labels or devices',
+				hasResult: true,
 				options: [
-					EntityMultiplePicker(ctx.getState(), undefined),
+					// The entity field keeps the id `entity_id` of the original option
+					...TargetPicker(ctx.getState(), registries, undefined, registries.supportsFloorsAndLabels()),
 					{
 						id: 'service',
 						label: 'Service',
@@ -47,41 +70,85 @@ export const genericDomain = defineDomain<GenericActions>({
 						label: 'Payload',
 						useVariables: true,
 					},
+					{
+						type: 'checkbox',
+						id: 'return_response',
+						label: 'Return response',
+						default: false,
+						tooltip:
+							'Return the service response as the action result. Only used by services which can return a response (HA 2023.7+)',
+					},
 				],
 				callback: async (evt, context) => {
-					try {
-						const payload = JSON.parse(evt.options.payload)
+					const options = evt.options
+					const payload = JSON.parse(options.payload)
 
-						// Split the domain off of the service name
-						const [domain, service] = `${evt.options.service}`.split('.', 2)
-						const serviceDefinition = initialServices[domain][service]
+					// Split the domain off of the service name
+					const [domain, service] = `${options.service}`.split('.', 2)
+					const serviceDefinition = ctx.getServices()[domain]?.[service]
+					if (!serviceDefinition) throw new Error(`Unknown service ${options.service}`)
 
-						const target: HassServiceTarget = {}
+					const target = buildTarget(options)
+					const selectedEntities = target.entity_id as string[] | undefined
+					if (selectedEntities && serviceDefinition.fields.entity_id) {
+						const entityIdSelector = serviceDefinition.fields.entity_id.selector as any | undefined
+						const selectorSupportsMultipleEntities = entityIdSelector?.entity?.multiple
 
-						const selectedEntities = evt.options.entity_id
-						if (selectedEntities.length > 0) {
-							if (serviceDefinition.fields.entity_id) {
-								const entityIdSelector = serviceDefinition.fields.entity_id.selector as any | undefined
-								const selectorSupportsMultipleEntities = entityIdSelector?.entity?.multiple
-
-								if (selectedEntities.length > 1 && !selectorSupportsMultipleEntities) {
-									throw new Error(`The service ${evt.options.service} only supports a single entity_id`)
-								}
-
-								payload.entity_id = selectorSupportsMultipleEntities ? selectedEntities : selectedEntities[0]
-							}
-
-							if (serviceDefinition.target) {
-								target.entity_id = selectedEntities
-							}
+						if (selectedEntities.length > 1 && !selectorSupportsMultipleEntities) {
+							throw new Error(`The service ${options.service} only supports a single entity_id`)
 						}
 
-						await invokeService(ctx.getClient(), { domain, service, data: payload, target, signal: context.signal })
-					} catch (e) {
-						console.debug(`Call service failed: ${e}`)
+						payload.entity_id = selectorSupportsMultipleEntities ? selectedEntities : selectedEntities[0]
 					}
+
+					const returnResponse = resolveReturnResponse(
+						serviceDefinition.response,
+						!!options.return_response,
+						ctx.getClient()?.haVersion,
+					)
+
+					const result = await invokeService(ctx.getClient(), {
+						domain,
+						service,
+						data: payload,
+						target: serviceDefinition.target ? target : undefined,
+						returnResponse,
+						signal: context.signal,
+					})
+					return (returnResponse ? (result ?? null) : null) as JsonValue
 				},
 			},
 		}
 	},
+	feedbacks: (ctx) => ({
+		entity_state_value: {
+			type: 'value',
+			name: 'Entity state or attribute value',
+			description: 'The state (or an attribute) of an entity, for use in expressions and text',
+			options: [EntityPicker(ctx.getState(), undefined), AttributePicker()],
+			callback: (feedback): JsonValue => {
+				subscribeEntityPicker(ctx, feedback)
+				const value = readValue(ctx.getStateObj()[feedback.options.entity_id], feedback.options.attribute)
+				return (value ?? null) as JsonValue
+			},
+			unsubscribe: (feedback) => unsubscribeEntityPicker(ctx, feedback),
+		},
+		entity_compare: {
+			type: 'value',
+			name: 'Compare entity state or attribute',
+			description: 'True when the entity value matches the comparison',
+			options: [
+				EntityPicker(ctx.getState(), undefined),
+				AttributePicker(),
+				ComparisonPicker(),
+				{ type: 'textinput', id: 'value', label: 'Value', default: '', useVariables: true },
+			],
+			callback: (feedback): boolean => {
+				subscribeEntityPicker(ctx, feedback)
+				const actual = readValue(ctx.getStateObj()[feedback.options.entity_id], feedback.options.attribute)
+				return compareValues(actual, feedback.options.comparison, feedback.options.value)
+			},
+			unsubscribe: (feedback) => unsubscribeEntityPicker(ctx, feedback),
+		},
+	}),
 })

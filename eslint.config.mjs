@@ -14,7 +14,7 @@ const customConfig = [
 	},
 
 	{
-		files: ['**/*.spec.ts', 'vitest.config.mjs'],
+		files: ['**/*.spec.ts', 'src/__mocks__/**', 'vitest.config.mjs'],
 		rules: {
 			'n/no-unpublished-import': 'off',
 		},

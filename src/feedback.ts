@@ -2,6 +2,7 @@ import type { CompanionFeedbackDefinitions } from '@companion-module/base'
 import { activeDomains } from './domains/index.js'
 import type { BinarySensorFeedbacks } from './domains/binary_sensor.js'
 import type { GroupFeedbacks } from './domains/group.js'
+import type { GenericFeedbacks } from './domains/generic.js'
 import type { InputBooleanFeedbacks } from './domains/input_boolean.js'
 import type { InputSelectFeedbacks } from './domains/input_select.js'
 import type { LightFeedbacks } from './domains/light.js'
@@ -15,7 +16,8 @@ export type FeedbacksSchema = SwitchFeedbacks &
 	LightFeedbacks &
 	BinarySensorFeedbacks &
 	InputSelectFeedbacks &
-	GroupFeedbacks
+	GroupFeedbacks &
+	GenericFeedbacks
 
 export function GetFeedbacksList(
 	ctx: DomainContext,

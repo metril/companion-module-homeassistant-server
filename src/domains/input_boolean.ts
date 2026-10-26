@@ -2,10 +2,10 @@ import { EntityMultiplePicker, OnOffTogglePicker } from '../choices.js'
 import { entityOnOff } from '../hass/service.js'
 import type { OnOffToggle } from '../util.js'
 import { entityTemplatePreset, onOffStateFeedback } from './helpers.js'
-import { defineDomain } from './types.js'
+import { defineDomain, type ActionResult } from './types.js'
 
 export type InputBooleanActions = {
-	set_input_boolean: { options: { entity_id: string[]; state: OnOffToggle } }
+	set_input_boolean: { options: { entity_id: string[]; state: OnOffToggle }; result: ActionResult }
 }
 export type InputBooleanFeedbacks = {
 	input_boolean_state: { type: 'boolean'; options: { entity_id: string; state: boolean } }
@@ -16,6 +16,7 @@ export const inputBooleanDomain = defineDomain<InputBooleanActions, InputBoolean
 	actions: (ctx) => ({
 		set_input_boolean: {
 			name: 'Set input_boolean state',
+			hasResult: true,
 			options: [EntityMultiplePicker(ctx.getState(), 'input_boolean'), OnOffTogglePicker()],
 			callback: async (evt, context) => entityOnOff(ctx.getClient(), evt.options, context.signal),
 		},

@@ -11,7 +11,10 @@ import { EntityPicker, OnOffPicker } from '../choices.js'
 import type { FeedbackId } from '../feedback.js'
 import { invokeService } from '../hass/service.js'
 import { OnOffToggle } from '../util.js'
-import type { DomainContext, PresetsResult } from './types.js'
+import type { ActionResult, DomainContext, PresetsResult } from './types.js'
+
+export const toIds = (v: unknown): string[] =>
+	Array.isArray(v) ? v.map(String) : typeof v === 'string' && v ? [v] : []
 
 /** Call `domain.service` for the entities selected in an action, with any extra service data */
 export async function callEntityService(
@@ -21,13 +24,14 @@ export async function callEntityService(
 	domain: string,
 	service: string,
 	extra?: object,
-): Promise<void> {
+): Promise<ActionResult> {
 	await invokeService(ctx.getClient(), {
 		domain,
 		service,
 		data: { entity_id: evt.options.entity_id, ...extra },
 		signal: context.signal,
 	})
+	return { service: `${domain}.${service}`, entity_id: toIds(evt.options.entity_id) }
 }
 
 export function checkEntityOnOffState(
@@ -107,6 +111,7 @@ export function entityTemplatePreset(ctx: DomainContext, params: EntityTemplateP
 	const preset = {
 		type: 'simple',
 		name: params.name,
+		notes: `Template: creates one button per ${params.labelPrefix.toLowerCase()} entity (stored in the entity-id local variable). ${toggle ? 'Pressing toggles it, and the button lights up while it is on.' : 'Pressing runs it.'}`,
 		style: {
 			text: `$(homeassistant-server:entity.$(local:entity-id))`,
 			size: 'auto',

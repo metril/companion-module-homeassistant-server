@@ -36,7 +36,7 @@ export async function entityOnOff(
 	client: Connection | undefined,
 	options: { state?: unknown; entity_id?: unknown },
 	signal?: AbortSignal,
-): Promise<void> {
+): Promise<{ service: string; entity_id: string[] }> {
 	let service: string
 	switch (options.state as OnOffToggle) {
 		case OnOffToggle.Off:
@@ -56,4 +56,9 @@ export async function entityOnOff(
 		data: { entity_id: options.entity_id },
 		signal,
 	})
+	const ids = options.entity_id
+	return {
+		service: `homeassistant.${service}`,
+		entity_id: Array.isArray(ids) ? ids.map(String) : typeof ids === 'string' && ids ? [ids] : [],
+	}
 }

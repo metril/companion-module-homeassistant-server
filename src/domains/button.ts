@@ -1,9 +1,9 @@
 import { EntityMultiplePicker } from '../choices.js'
 import { callEntityService, entityTemplatePreset } from './helpers.js'
-import { defineDomain } from './types.js'
+import { defineDomain, type ActionResult } from './types.js'
 
 export type ButtonActions = {
-	press_button: { options: { entity_id: string[] } }
+	press_button: { options: { entity_id: string[] }; result: ActionResult }
 }
 
 export const buttonDomain = defineDomain<ButtonActions>({
@@ -11,6 +11,7 @@ export const buttonDomain = defineDomain<ButtonActions>({
 	actions: (ctx) => ({
 		press_button: {
 			name: 'Press button',
+			hasResult: true,
 			options: [EntityMultiplePicker(ctx.getState(), 'button')],
 			callback: async (evt, context) => callEntityService(ctx, evt, context, 'button', 'press'),
 		},

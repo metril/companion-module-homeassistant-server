@@ -2,10 +2,10 @@ import { EntityMultiplePicker, OnOffTogglePicker } from '../choices.js'
 import { entityOnOff } from '../hass/service.js'
 import type { OnOffToggle } from '../util.js'
 import { entityTemplatePreset, onOffStateFeedback } from './helpers.js'
-import { defineDomain } from './types.js'
+import { defineDomain, type ActionResult } from './types.js'
 
 export type SwitchActions = {
-	set_switch: { options: { entity_id: string[]; state: OnOffToggle } }
+	set_switch: { options: { entity_id: string[]; state: OnOffToggle }; result: ActionResult }
 }
 export type SwitchFeedbacks = {
 	switch_state: { type: 'boolean'; options: { entity_id: string; state: boolean } }
@@ -16,6 +16,7 @@ export const switchDomain = defineDomain<SwitchActions, SwitchFeedbacks>({
 	actions: (ctx) => ({
 		set_switch: {
 			name: 'Set switch state',
+			hasResult: true,
 			options: [EntityMultiplePicker(ctx.getState(), 'switch'), OnOffTogglePicker()],
 			callback: async (evt, context) => entityOnOff(ctx.getClient(), evt.options, context.signal),
 		},

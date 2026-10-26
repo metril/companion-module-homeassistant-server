@@ -1,9 +1,9 @@
 import { EntityMultiplePicker } from '../choices.js'
 import { callEntityService, entityTemplatePreset } from './helpers.js'
-import { defineDomain } from './types.js'
+import { defineDomain, type ActionResult } from './types.js'
 
 export type SceneActions = {
-	activate_scene: { options: { entity_id: string[] } }
+	activate_scene: { options: { entity_id: string[] }; result: ActionResult }
 }
 
 export const sceneDomain = defineDomain<SceneActions>({
@@ -11,6 +11,7 @@ export const sceneDomain = defineDomain<SceneActions>({
 	actions: (ctx) => ({
 		activate_scene: {
 			name: 'Activate scene',
+			hasResult: true,
 			options: [EntityMultiplePicker(ctx.getState(), 'scene')],
 			callback: async (evt, context) => callEntityService(ctx, evt, context, 'scene', 'turn_on'),
 		},

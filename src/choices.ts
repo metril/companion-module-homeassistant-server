@@ -81,6 +81,10 @@ export function EntityMultiplePicker(
 	}
 }
 
+// The ids are fixed (target_type, entity_id, target_<type>) but are spread into actions with their own key unions
+
+type TargetField = CompanionInputFieldDropdown<any> | CompanionInputFieldMultiDropdown<any>
+
 export type TargetType = 'entity' | 'area' | 'floor' | 'label' | 'device'
 
 /**
@@ -93,7 +97,7 @@ export function TargetPicker(
 	registries: Registries,
 	prefix: string | undefined,
 	supportsFloorsAndLabels: boolean,
-): (CompanionInputFieldDropdown<'target_type'> | CompanionInputFieldMultiDropdown<string>)[] {
+): TargetField[] {
 	const typeChoices: DropdownChoice<string>[] = [
 		{ id: 'entity', label: 'Entity' },
 		{ id: 'area', label: 'Area' },
@@ -106,7 +110,7 @@ export function TargetPicker(
 	const registryChoices = (entries: { id: string; name: string }[]): DropdownChoice<string>[] =>
 		entries.map((e) => ({ id: e.id, label: e.name })).sort((a, b) => a.label.localeCompare(b.label))
 
-	const fields: (CompanionInputFieldDropdown<'target_type'> | CompanionInputFieldMultiDropdown<string>)[] = [
+	const fields: TargetField[] = [
 		{
 			type: 'dropdown',
 			label: 'Target type',
@@ -117,7 +121,7 @@ export function TargetPicker(
 		},
 		{
 			...EntityMultiplePicker(state, prefix),
-			id: 'target_entity',
+			// Keeps the id of the original entity option, so existing actions are unchanged
 			isVisibleExpression: '$(options:target_type) == "entity"',
 		},
 		{
