@@ -1,4 +1,5 @@
 import type { JsonValue } from '@companion-module/base'
+import { atLeastHaVersion } from 'home-assistant-js-websocket/dist/util.js'
 import { AttributePicker, ComparisonPicker, EntityPicker, TargetPicker, type Comparison } from '../choices.js'
 import { compareValues, readValue } from '../hass/compare.js'
 import { invokeService } from '../hass/service.js'
@@ -76,7 +77,11 @@ export const genericDomain = defineDomain<GenericActions, GenericFeedbacks>({
 						label: 'Return response',
 						default: false,
 						tooltip:
-							'Return the service response as the action result. Only used by services which can return a response (HA 2023.7+)',
+							'Return the service response as the action result. Only used by services which can return a response',
+						// Needs HA 2023.7+
+						...(atLeastHaVersion(ctx.getClient()?.haVersion ?? '0.0.0', 2023, 7, 0)
+							? {}
+							: { isVisibleExpression: 'false' }),
 					},
 				],
 				callback: async (evt, context) => {
@@ -115,7 +120,9 @@ export const genericDomain = defineDomain<GenericActions, GenericFeedbacks>({
 						returnResponse,
 						signal: context.signal,
 					})
-					return (returnResponse ? (result ?? null) : null) as JsonValue
+					return (
+						returnResponse ? ((result as { response?: unknown } | undefined)?.response ?? null) : null
+					) as JsonValue
 				},
 			},
 		}

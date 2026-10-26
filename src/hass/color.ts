@@ -4,7 +4,9 @@ const COLOR_MODES = new Set(['hs', 'xy', 'rgb', 'rgbw', 'rgbww'])
 
 /** Throw if the light's supported_color_modes cannot do the requested colour mode */
 export function validateColorMode(mode: ColorMode, supported: string[] | undefined, entityId = 'light'): void {
-	const modes = supported ?? []
+	// Unknown capabilities (eg state not loaded yet): let HA decide
+	if (supported === undefined) return
+	const modes = supported
 	const ok = mode === 'kelvin' ? modes.includes('color_temp') : modes.some((m) => COLOR_MODES.has(m))
 	if (!ok) {
 		const what = mode === 'kelvin' ? 'colour temperature' : 'colour'

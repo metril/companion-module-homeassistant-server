@@ -12,7 +12,7 @@ describe('validateColorMode', () => {
 			expect(() => validateColorMode('hs', [m])).not.toThrow()
 		}
 		expect(() => validateColorMode('rgb', ['brightness'])).toThrow()
-		expect(() => validateColorMode('hs', undefined)).toThrow()
+		expect(() => validateColorMode('hs', undefined)).not.toThrow()
 	})
 })
 

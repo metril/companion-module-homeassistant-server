@@ -41,6 +41,17 @@ describe('invokeService', () => {
 	})
 })
 
+describe('error wrapping', () => {
+	it('wraps plain object rejections in an Error', async () => {
+		const { conn } = mockConnection()
+		conn.sendMessagePromise = (async () =>
+			// eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+			Promise.reject({ code: 'service_validation_error', message: 'boom' })) as never
+		await expect(invokeService(conn, { domain: 'a', service: 'b' })).rejects.toThrow('boom')
+		await expect(invokeService(conn, { domain: 'a', service: 'b', signal })).rejects.toThrow('boom')
+	})
+})
+
 describe('domain service mapping', () => {
 	it('maps on/off/toggle to homeassistant services', async () => {
 		const { conn, sent } = mockConnection()
@@ -92,5 +103,7 @@ describe('domain service mapping', () => {
 		await expect(run(actions.call_service, { ...base, payload: '{nope' })).rejects.toThrow()
 		await run(actions.call_service, { ...base, payload: '{"type":"daily"}', return_response: false })
 		expect(sent[0]).toMatchObject({ return_response: true, target: { entity_id: ['weather.home'] } })
+		// the mock returns {} so the response is null
+		expect(await run(actions.call_service, { ...base, payload: '{}' })).toBeNull()
 	})
 })

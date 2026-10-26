@@ -22,12 +22,18 @@ export async function invokeService(client: Connection | undefined, params: Invo
 	signal?.throwIfAborted()
 
 	const call = callService(client, domain, service, data, target, returnResponse || undefined)
-	if (!signal) return call
+	// HA rejects with plain objects ({code, message}); make sure callers always get an Error
+	const toError = (e: unknown): Error =>
+		e instanceof Error ? e : new Error((e as { message?: string } | undefined)?.message ?? JSON.stringify(e))
+	if (!signal)
+		return call.catch((e: unknown) => {
+			throw toError(e)
+		})
 
 	return new Promise((resolve, reject) => {
-		const onAbort = (): void => reject(signal.reason instanceof Error ? signal.reason : new Error('Aborted'))
+		const onAbort = (): void => reject(toError(signal.reason ?? 'Aborted'))
 		signal.addEventListener('abort', onAbort, { once: true })
-		call.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+		call.then(resolve, (e: unknown) => reject(toError(e))).finally(() => signal.removeEventListener('abort', onAbort))
 	})
 }
 

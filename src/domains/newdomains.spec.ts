@@ -47,6 +47,22 @@ describe('new domain service mapping', () => {
 		})
 	})
 
+	it('climate range mode steps and sets low/high', async () => {
+		const { conn, sent } = mockConnection()
+		const ctx = mockContext(conn, {
+			'climate.a': {
+				state: 'heat_cool',
+				attributes: { target_temp_low: 18, target_temp_high: 24, min_temp: 7, max_temp: 30 },
+			},
+		})
+		const actions = climateDomain.actions!(ctx)
+		await run(actions.climate_step_temperature, { entity_id: ['climate.a'], delta: 1 })
+		await run(actions.climate_set_temperature, { entity_id: ['climate.a'], temperature: 20, low: 17, high: 25 })
+		expect(sent[0].service_data).toMatchObject({ target_temp_low: 19, target_temp_high: 25 })
+		expect(sent[1].service_data).toMatchObject({ target_temp_low: 17, target_temp_high: 25 })
+		expect(sent[1].service_data).not.toHaveProperty('temperature')
+	})
+
 	it('media player volume step is relative and clamped', async () => {
 		const { conn, sent } = mockConnection()
 		const ctx = mockContext(conn, { 'media_player.a': { state: 'on', attributes: { volume_level: 0.98 } } })
