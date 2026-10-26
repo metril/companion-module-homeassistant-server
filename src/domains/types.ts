@@ -42,6 +42,9 @@ export interface DomainContext {
 /** Result of an action: what was called, and on which entities */
 export type ActionResult = { service: string; entity_id: string[] }
 
+/** Schema of an action which takes entity ids plus extra options */
+export type EntityAction<X extends object = object> = { options: { entity_id: string[] } & X; result: ActionResult }
+
 export type PresetsResult = [CompanionPresetSection[], CompanionPresetDefinitions<HassSchema>]
 
 export interface DomainDefinition<
@@ -50,6 +53,8 @@ export interface DomainDefinition<
 > {
 	/** HA domain this definition belongs to. Registered only when at least one entity of that domain exists. */
 	id: string
+	/** Further HA domains whose entities this definition handles (eg input_number for number) */
+	alsoDomains?: string[]
 	/** Always register, regardless of which entities exist (eg the generic call_service action) */
 	alwaysRegister?: boolean
 	actions?: (ctx: DomainContext) => CompanionActionDefinitions<A>

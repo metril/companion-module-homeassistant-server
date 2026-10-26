@@ -1,3 +1,10 @@
+import type { ClimateFeedbacks } from './domains/climate.js'
+import type { CoverFeedbacks } from './domains/cover.js'
+import type { FanFeedbacks } from './domains/fan.js'
+import type { LockFeedbacks } from './domains/lock.js'
+import type { MediaPlayerFeedbacks } from './domains/media_player.js'
+import type { NumberFeedbacks } from './domains/number.js'
+import type { ValveFeedbacks } from './domains/valve.js'
 import type { CompanionFeedbackDefinitions } from '@companion-module/base'
 import { activeDomains } from './domains/index.js'
 import type { BinarySensorFeedbacks } from './domains/binary_sensor.js'
@@ -17,7 +24,14 @@ export type FeedbacksSchema = SwitchFeedbacks &
 	BinarySensorFeedbacks &
 	InputSelectFeedbacks &
 	GroupFeedbacks &
-	GenericFeedbacks
+	GenericFeedbacks &
+	ClimateFeedbacks &
+	CoverFeedbacks &
+	FanFeedbacks &
+	LockFeedbacks &
+	MediaPlayerFeedbacks &
+	NumberFeedbacks &
+	ValveFeedbacks
 
 export function GetFeedbacksList(
 	ctx: DomainContext,

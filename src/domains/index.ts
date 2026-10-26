@@ -1,3 +1,11 @@
+import { climateDomain } from './climate.js'
+import { coverDomain } from './cover.js'
+import { fanDomain } from './fan.js'
+import { lockDomain } from './lock.js'
+import { mediaPlayerDomain } from './media_player.js'
+import { numberDomain } from './number.js'
+import { selectDomain } from './select.js'
+import { valveDomain } from './valve.js'
 import { binarySensorDomain } from './binary_sensor.js'
 import { buttonDomain } from './button.js'
 import { genericDomain } from './generic.js'
@@ -22,6 +30,14 @@ export const ALL_DOMAINS: DomainDefinition<any, any>[] = [
 	groupDomain,
 	inputSelectDomain,
 	binarySensorDomain,
+	coverDomain,
+	climateDomain,
+	mediaPlayerDomain,
+	lockDomain,
+	fanDomain,
+	valveDomain,
+	numberDomain,
+	selectDomain,
 	genericDomain,
 ]
 
@@ -32,5 +48,11 @@ export const ALL_DOMAINS: DomainDefinition<any, any>[] = [
  */
 
 export function activeDomains(presentDomains: Set<string> | undefined): DomainDefinition<any, any>[] {
-	return ALL_DOMAINS.filter((d) => d.alwaysRegister || !presentDomains || presentDomains.has(d.id))
+	return ALL_DOMAINS.filter(
+		(d) =>
+			d.alwaysRegister ||
+			!presentDomains ||
+			presentDomains.has(d.id) ||
+			d.alsoDomains?.some((a) => presentDomains.has(a)),
+	)
 }

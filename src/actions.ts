@@ -1,3 +1,11 @@
+import type { ClimateActions } from './domains/climate.js'
+import type { CoverActions } from './domains/cover.js'
+import type { FanActions } from './domains/fan.js'
+import type { LockActions } from './domains/lock.js'
+import type { MediaPlayerActions } from './domains/media_player.js'
+import type { NumberActions } from './domains/number.js'
+import type { SelectActions } from './domains/select.js'
+import type { ValveActions } from './domains/valve.js'
 import type { CompanionActionDefinitions } from '@companion-module/base'
 import { activeDomains } from './domains/index.js'
 import type { ButtonActions } from './domains/button.js'
@@ -19,7 +27,15 @@ export type ActionsSchema = SwitchActions &
 	SceneActions &
 	InputSelectActions &
 	GroupActions &
-	GenericActions
+	GenericActions &
+	ClimateActions &
+	CoverActions &
+	FanActions &
+	LockActions &
+	MediaPlayerActions &
+	NumberActions &
+	SelectActions &
+	ValveActions
 
 function entityIdsOf(value: unknown): string[] {
 	if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string' && v !== '')
