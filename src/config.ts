@@ -1,11 +1,6 @@
 import { SomeCompanionConfigField } from '@companion-module/base'
-import type { HassEntity } from 'home-assistant-js-websocket'
-import {
-	COMMON_HA_DOMAINS,
-	DEFAULT_INCLUDED_DOMAINS,
-	type FilterBreakdown,
-	perDomainCountsFromState,
-} from './filter.js'
+import type { Registries } from './hass/registries.js'
+import { COMMON_HA_DOMAINS, DEFAULT_INCLUDED_DOMAINS, type FilterBreakdown, perDomainCountsFromIds } from './filter.js'
 
 export type DeviceConfig = {
 	url?: string
@@ -15,6 +10,12 @@ export type DeviceConfig = {
 	include_patterns?: string
 	exclude_patterns?: string
 	expose_attributes?: boolean
+	include_labels?: string[]
+	include_areas?: string[]
+	include_floors?: string[]
+	exclude_labels?: string[]
+	exclude_areas?: string[]
+	exclude_floors?: string[]
 }
 
 export type DeviceSecrets = {
@@ -53,8 +54,8 @@ function fmt(n: number): string {
 	return n.toLocaleString('en-US')
 }
 
-function buildExplainer(state: HassEntity[], lastCounts: LastFilterCounts | undefined): string {
-	if (state.length === 0 || !lastCounts?.breakdown) {
+function buildExplainer(entityIds: string[], lastCounts: LastFilterCounts | undefined): string {
+	if (entityIds.length === 0 || !lastCounts?.breakdown) {
 		return (
 			'<b>Variable filtering.</b> Save your settings once to see live counts and a per-domain ' +
 			'breakdown of your Home Assistant install here. The fields below combine with <b>AND</b> — ' +
@@ -110,9 +111,9 @@ function buildExplainer(state: HassEntity[], lastCounts: LastFilterCounts | unde
 	return summary + '<br>' + perLayer + '<br>' + topDomains + '<br>' + howItWorks
 }
 
-function buildDomainChoices(state: HassEntity[]): { id: string; label: string }[] {
-	if (state.length === 0) return COMMON_HA_DOMAINS
-	const counts = perDomainCountsFromState(state)
+function buildDomainChoices(entityIds: string[]): { id: string; label: string }[] {
+	if (entityIds.length === 0) return COMMON_HA_DOMAINS
+	const counts = perDomainCountsFromIds(entityIds)
 	return COMMON_HA_DOMAINS.map((d) => {
 		const n = counts[d.id] ?? 0
 		if (n === 0) return { id: d.id, label: `${d.label} (none)` }
@@ -121,9 +122,43 @@ function buildDomainChoices(state: HassEntity[]): { id: string; label: string }[
 	})
 }
 
+function registryChoices(entries: { id: string; name: string }[]): { id: string; label: string }[] {
+	return entries.map((e) => ({ id: e.id, label: e.name })).sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** Label/area/floor include and exclude selectors. Floors and labels need HA 2024.4+ */
+function registryFilterFields(registries: Registries | undefined): SomeCompanionConfigField[] {
+	const fields: SomeCompanionConfigField[] = []
+	const add = (
+		kind: 'include' | 'exclude',
+		type: 'labels' | 'areas' | 'floors',
+		entries: { id: string; name: string }[],
+	) =>
+		fields.push({
+			type: 'multidropdown',
+			id: `${kind}_${type}`,
+			label: `${kind === 'include' ? 'Include' : 'Exclude'} ${type} (HA registry${kind === 'include' ? ', empty = no filter' : ''})`,
+			width: 12,
+			default: [],
+			choices: registryChoices(entries),
+			minSelection: 0,
+			isVisibleExpression: FILTER_VISIBLE,
+		})
+
+	const supportsNew = registries?.supportsFloorsAndLabels() ?? true
+	if (supportsNew) add('include', 'labels', registries?.getLabels() ?? [])
+	add('include', 'areas', registries?.getAreas() ?? [])
+	if (supportsNew) add('include', 'floors', registries?.getFloors() ?? [])
+	if (supportsNew) add('exclude', 'labels', registries?.getLabels() ?? [])
+	add('exclude', 'areas', registries?.getAreas() ?? [])
+	if (supportsNew) add('exclude', 'floors', registries?.getFloors() ?? [])
+	return fields
+}
+
 export function GetConfigFields(
-	state: HassEntity[] = [],
+	entityIds: string[] = [],
 	lastCounts: LastFilterCounts | undefined = undefined,
+	registries: Registries | undefined = undefined,
 ): SomeCompanionConfigField[] {
 	return [
 		{
@@ -159,7 +194,7 @@ export function GetConfigFields(
 			id: 'filter_help',
 			label: 'Variable filtering',
 			width: 12,
-			value: buildExplainer(state, lastCounts),
+			value: buildExplainer(entityIds, lastCounts),
 			isVisibleExpression: FILTER_VISIBLE,
 		},
 		{
@@ -168,7 +203,7 @@ export function GetConfigFields(
 			label: 'Include domains (empty = all)',
 			width: 12,
 			default: DEFAULT_INCLUDED_DOMAINS,
-			choices: buildDomainChoices(state),
+			choices: buildDomainChoices(entityIds),
 			minSelection: 0,
 			isVisibleExpression: FILTER_VISIBLE,
 		},
@@ -190,6 +225,7 @@ export function GetConfigFields(
 			tooltip: 'Examples: *debug*, *.test_*  — entities matching ANY of these are dropped',
 			isVisibleExpression: FILTER_VISIBLE,
 		},
+		...registryFilterFields(registries),
 		{
 			type: 'checkbox',
 			id: 'expose_attributes',

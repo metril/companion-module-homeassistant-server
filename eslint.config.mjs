@@ -7,9 +7,19 @@ const baseConfig = await generateEslintConfig({
 const customConfig = [
 	...baseConfig,
 
+	// Local leftovers (git-excluded) and build output
+	{ ignores: ['**/*.root-old/**', 'dist/**', 'pkg/**'] },
+
 	{
 		rules: {
 			'n/no-missing-import': 'off',
+		},
+	},
+
+	{
+		files: ['**/*.spec.ts', 'src/__mocks__/**', 'vitest.config.mjs'],
+		rules: {
+			'n/no-unpublished-import': 'off',
 		},
 	},
 ]
