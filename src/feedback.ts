@@ -1,190 +1,29 @@
-import type {
-	CompanionFeedbackDefinitions,
-	CompanionFeedbackBooleanEvent,
-	CompanionFeedbackInfo,
-} from '@companion-module/base'
-import type { HassEntities, HassEntity } from 'home-assistant-js-websocket'
-import { EntityPicker, OnOffPicker } from './choices.js'
-import { EntitySubscriptions } from './state.js'
+import type { CompanionFeedbackDefinitions } from '@companion-module/base'
+import { activeDomains } from './domains/index.js'
+import type { BinarySensorFeedbacks } from './domains/binary_sensor.js'
+import type { GroupFeedbacks } from './domains/group.js'
+import type { InputBooleanFeedbacks } from './domains/input_boolean.js'
+import type { InputSelectFeedbacks } from './domains/input_select.js'
+import type { LightFeedbacks } from './domains/light.js'
+import type { SwitchFeedbacks } from './domains/switch.js'
+import type { DomainContext } from './domains/types.js'
 
 export type FeedbackId = keyof FeedbacksSchema
 
-export type FeedbacksSchema = {
-	switch_state: {
-		type: 'boolean'
-		options: {
-			entity_id: string
-			state: boolean
-		}
-	}
-	input_boolean_state: {
-		type: 'boolean'
-		options: {
-			entity_id: string
-			state: boolean
-		}
-	}
-	light_on_state: {
-		type: 'boolean'
-		options: {
-			entity_id: string
-			state: boolean
-		}
-	}
-	binary_sensor_state: {
-		type: 'boolean'
-		options: {
-			entity_id: string
-			state: boolean
-		}
-	}
-	input_select_state: {
-		type: 'boolean'
-		options: {
-			entity_id: string
-			option: string
-		}
-	}
-	group_on_state: {
-		type: 'boolean'
-		options: {
-			entity_id: string
-			state: boolean
-		}
-	}
-}
+export type FeedbacksSchema = SwitchFeedbacks &
+	InputBooleanFeedbacks &
+	LightFeedbacks &
+	BinarySensorFeedbacks &
+	InputSelectFeedbacks &
+	GroupFeedbacks
 
 export function GetFeedbacksList(
-	initialState: HassEntity[],
-	getState: () => HassEntities,
-	entitySubscriptions: EntitySubscriptions,
+	ctx: DomainContext,
+	presentDomains: Set<string> | undefined,
 ): CompanionFeedbackDefinitions<FeedbacksSchema> {
-	const checkEntityOnOffState = (
-		feedback: CompanionFeedbackBooleanEvent<{ entity_id: string; state: boolean }>,
-	): boolean => {
-		const state = getState()
-		const entity = state[feedback.options.entity_id]
-		if (entity) {
-			const isOn = entity.state === 'on'
-			const targetOn = !!feedback.options.state
-			return isOn === targetOn
-		}
-		return false
+	const feedbacks: Record<string, unknown> = {}
+	for (const domain of activeDomains(presentDomains)) {
+		if (domain.feedbacks) Object.assign(feedbacks, domain.feedbacks(ctx))
 	}
-
-	const subscribeEntityPicker = (feedback: CompanionFeedbackInfo<{ entity_id: string }>): void => {
-		entitySubscriptions.subscribe(feedback.options.entity_id, feedback.id, feedback.feedbackId as FeedbackId)
-	}
-	const unsubscribeEntityPicker = (feedback: CompanionFeedbackInfo<{ entity_id: string }>): void => {
-		entitySubscriptions.unsubscribe(feedback.options.entity_id, feedback.id)
-	}
-
-	const feedbacks: CompanionFeedbackDefinitions<FeedbacksSchema> = {
-		switch_state: {
-			type: 'boolean',
-			name: 'Change from switch state',
-			description: 'If the switch state matches the rule, change style of the bank',
-			options: [EntityPicker(initialState, 'switch'), OnOffPicker()],
-			defaultStyle: {
-				color: 0x000000,
-				bgcolor: 0x00ff00,
-			},
-			callback: (feedback): boolean => {
-				subscribeEntityPicker(feedback)
-
-				return checkEntityOnOffState(feedback)
-			},
-			unsubscribe: unsubscribeEntityPicker,
-		},
-		input_boolean_state: {
-			type: 'boolean',
-			name: 'Change from input_boolean state',
-			description: 'If the input_boolean state matches the rule, change style of the bank',
-			options: [EntityPicker(initialState, 'input_boolean'), OnOffPicker()],
-			defaultStyle: {
-				color: 0x000000,
-				bgcolor: 0x00ff00,
-			},
-			callback: (feedback): boolean => {
-				subscribeEntityPicker(feedback)
-				return checkEntityOnOffState(feedback)
-			},
-			unsubscribe: unsubscribeEntityPicker,
-		},
-		light_on_state: {
-			type: 'boolean',
-			name: 'Change from light on state',
-			description: 'If the light state matches the rule, change style of the bank',
-			options: [EntityPicker(initialState, 'light'), OnOffPicker()],
-			defaultStyle: {
-				color: 0x000000,
-				bgcolor: 0x00ff00,
-			},
-			callback: (feedback): boolean => {
-				subscribeEntityPicker(feedback)
-				return checkEntityOnOffState(feedback)
-			},
-			unsubscribe: unsubscribeEntityPicker,
-		},
-		binary_sensor_state: {
-			type: 'boolean',
-			name: 'Change from binary sensor state',
-			description: 'If the binary sensor state matches the rule, change style of the bank',
-			options: [EntityPicker(initialState, 'binary_sensor'), OnOffPicker()],
-			defaultStyle: {
-				color: 0x000000,
-				bgcolor: 0x00ff00,
-			},
-			callback: (feedback): boolean => {
-				subscribeEntityPicker(feedback)
-				return checkEntityOnOffState(feedback)
-			},
-			unsubscribe: unsubscribeEntityPicker,
-		},
-		input_select_state: {
-			type: 'boolean',
-			name: 'Change from input select state',
-			description: 'If the input select state matches the rule, change style of the bank',
-			options: [
-				EntityPicker(initialState, 'input_select'),
-				{
-					type: 'textinput',
-					id: 'option',
-					default: '',
-					label: 'Option',
-				},
-			],
-			defaultStyle: {
-				color: 0x000000,
-				bgcolor: 0x00ff00,
-			},
-			callback: (feedback): boolean => {
-				subscribeEntityPicker(feedback)
-				const state = getState()
-				const entity = state[String(feedback.options.entity_id)]
-				if (entity) {
-					return entity.state === feedback.options.option
-				}
-				return false
-			},
-			unsubscribe: unsubscribeEntityPicker,
-		},
-		group_on_state: {
-			type: 'boolean',
-			name: 'Change from group on state',
-			description: 'If the group state matches the rule, change style of the bank',
-			options: [EntityPicker(initialState, 'group'), OnOffPicker()],
-			defaultStyle: {
-				color: 0x000000,
-				bgcolor: 0x00ff00,
-			},
-			callback: (feedback): boolean => {
-				subscribeEntityPicker(feedback)
-				return checkEntityOnOffState(feedback)
-			},
-			unsubscribe: unsubscribeEntityPicker,
-		},
-	}
-
-	return feedbacks
+	return feedbacks as CompanionFeedbackDefinitions<FeedbacksSchema>
 }
