@@ -10,6 +10,10 @@ While developing the module, by using `yarn dev` the compiler will be run in wat
 
 ## Changes
 
+### v3.0.2
+
+- Config page and log: the filter breakdown now shows an "After labels/areas/floors" row when a label, area or floor filter is set
+
 ### v3.0.1
 
 - `Compare entity state or attribute` is now a normal boolean feedback with the standard style picker

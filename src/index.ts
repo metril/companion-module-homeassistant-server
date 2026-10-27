@@ -548,6 +548,10 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 		}
 
 		const breakdown = computeFilterBreakdown(this.#allEntityIds(), this.config)
+		if (this.resolvedIds && hasTaxonomyFilter(this.config)) {
+			const resolved = this.resolvedIds
+			breakdown.afterTaxonomy = this.#allEntityIds().filter((id) => resolved.has(id)).length
+		}
 		const counts = InitVariables(this, this.state, this.entityFilter, this.exposeAttributes)
 		this.lastFilterCounts = {
 			entitiesMatched: counts.entitiesMatched,
@@ -562,6 +566,7 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 			`  after domains:          ${breakdown.afterDomains}`,
 			`  after include patterns: ${breakdown.afterIncludes}`,
 			`  after exclude patterns: ${breakdown.afterExcludes}`,
+			...(breakdown.afterTaxonomy === undefined ? [] : [`  after labels/areas/floors: ${breakdown.afterTaxonomy}`]),
 			`  variables registered:   ${counts.variablesCount} (attrs ${this.exposeAttributes ? 'on' : 'off'})`,
 		].join('\n')
 		this.log('info', summary)
