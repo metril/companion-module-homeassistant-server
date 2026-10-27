@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mockConnection, mockContext } from '../__mocks__/connection.js'
 import { activeDomains } from './index.js'
 import { climateDomain } from './climate.js'
 import { coverDomain } from './cover.js'
+import { genericDomain } from './generic.js'
 import { lockDomain } from './lock.js'
 import { mediaPlayerDomain } from './media_player.js'
 import { numberDomain } from './number.js'
@@ -91,5 +92,70 @@ describe('domain registration', () => {
 	})
 	it('registers only domains with entities, plus generic', () => {
 		expect(ids(['light', 'input_number'])).toEqual(['light', 'number', 'generic'])
+	})
+})
+
+describe('generic label_used_entities', () => {
+	const setup = (labels: { id: string; name: string }[], registry: { ei: string; lb?: string[] }[]) => {
+		const sent: Record<string, any>[] = []
+		const conn = {
+			haVersion: '2024.6.0',
+			sendMessagePromise: vi.fn(async (msg: Record<string, any>) => {
+				sent.push(msg)
+				if (msg.type === 'config/label_registry/create') return { label_id: 'new_label' }
+				if (msg.type === 'config/entity_registry/list_for_display') return { entities: registry }
+				return {}
+			}),
+		} as any
+		const ctx = mockContext(conn)
+		ctx.getRegistries = () =>
+			({
+				supportsFloorsAndLabels: () => true,
+				getLabels: () => labels,
+				getAreas: () => [],
+				getDevices: () => [],
+				getFloors: () => [],
+			}) as any
+		ctx.subs.subscribe(['light.a', 'light.b', 'sensor.yaml'], 'i1', 'action' as any)
+		return { ctx, sent }
+	}
+
+	it('creates a missing label, merges with existing labels and skips unregistered', async () => {
+		const { ctx, sent } = setup([], [{ ei: 'light.a', lb: ['other'] }, { ei: 'light.b' }])
+		const res = await run(genericDomain.actions!(ctx).label_used_entities, { label: 'companion' })
+		expect(res).toEqual({ labelled: 2, already: 0, skipped: 1 })
+		expect(sent.filter((m) => m.type === 'config/label_registry/create')).toHaveLength(1)
+		const updates = sent.filter((m) => m.type === 'config/entity_registry/update')
+		expect(updates).toContainEqual({
+			type: 'config/entity_registry/update',
+			entity_id: 'light.a',
+			labels: ['other', 'new_label'],
+		})
+		expect(updates).toContainEqual({
+			type: 'config/entity_registry/update',
+			entity_id: 'light.b',
+			labels: ['new_label'],
+		})
+	})
+
+	it('reuses an existing label (case-insensitive) and skips entities which already have it', async () => {
+		const { ctx, sent } = setup(
+			[{ id: 'lab1', name: 'Companion' }],
+			[{ ei: 'light.a', lb: ['lab1'] }, { ei: 'light.b' }],
+		)
+		const res = await run(genericDomain.actions!(ctx).label_used_entities, { label: 'companion' })
+		expect(res).toEqual({ labelled: 1, already: 1, skipped: 1 })
+		expect(sent.some((m) => m.type === 'config/label_registry/create')).toBe(false)
+		expect(sent.filter((m) => m.type === 'config/entity_registry/update')).toEqual([
+			{ type: 'config/entity_registry/update', entity_id: 'light.b', labels: ['lab1'] },
+		])
+	})
+})
+
+describe('generic feedbacks', () => {
+	it('entity_compare is a boolean feedback with a default style', () => {
+		const fb = genericDomain.feedbacks!(mockContext(undefined)).entity_compare as any
+		expect(fb.type).toBe('boolean')
+		expect(fb.defaultStyle).toBeDefined()
 	})
 })

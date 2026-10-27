@@ -39,5 +39,6 @@ export function mockContext(
 			getLabels: () => [],
 		}),
 		subs: new EntitySubscriptions(),
+		log: vi.fn(),
 	} as unknown as DomainContext
 }

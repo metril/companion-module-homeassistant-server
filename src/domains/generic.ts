@@ -2,6 +2,7 @@ import type { JsonValue } from '@companion-module/base'
 import { atLeastHaVersion } from 'home-assistant-js-websocket/dist/util.js'
 import { AttributePicker, ComparisonPicker, EntityPicker, TargetPicker, type Comparison } from '../choices.js'
 import { compareValues, readValue } from '../hass/compare.js'
+import type { EntityIndexEntry } from '../hass/entityIndex.js'
 import { invokeService } from '../hass/service.js'
 import { buildTarget, resolveReturnResponse } from '../hass/targets.js'
 import { subscribeEntityPicker, unsubscribeEntityPicker } from './helpers.js'
@@ -22,14 +23,17 @@ export type GenericActions = {
 		}
 		result: JsonValue
 	}
+	label_used_entities: {
+		options: { label: string }
+		result: { labelled: number; already: number; skipped: number }
+	}
 }
 
 export type GenericFeedbacks = {
 	entity_state_value: { type: 'value'; options: { entity_id: string; attribute: string }; result: JsonValue }
 	entity_compare: {
-		type: 'value'
+		type: 'boolean'
 		options: { entity_id: string; attribute: string; comparison: Comparison; value: string }
-		result: boolean
 	}
 }
 
@@ -125,13 +129,78 @@ export const genericDomain = defineDomain<GenericActions, GenericFeedbacks>({
 					) as JsonValue
 				},
 			},
+			label_used_entities: {
+				name: 'Label used entities',
+				description:
+					'Adds a Home Assistant label to every entity used by your buttons, so you can filter on it ("Include labels"). Needs an admin token and HA 2024.4+. Never removes labels',
+				hasResult: true,
+				options: [{ type: 'textinput', id: 'label', label: 'Label name', default: 'companion' }],
+				callback: async (evt) => {
+					const conn = ctx.getClient()
+					if (!conn) throw new Error('Not connected to Home Assistant')
+					if (!ctx.getRegistries().supportsFloorsAndLabels()) throw new Error('Labels need Home Assistant 2024.4+')
+					const name = `${evt.options.label}`.trim()
+					if (!name) throw new Error('Label name is empty')
+
+					try {
+						const existing = ctx
+							.getRegistries()
+							.getLabels()
+							.find((l) => l.name.toLowerCase() === name.toLowerCase())
+						const labelId =
+							existing?.id ??
+							(await conn.sendMessagePromise<{ label_id: string }>({ type: 'config/label_registry/create', name }))
+								.label_id
+
+						// Read fresh: the entity index is only kept while server-side filtering is active
+						const { entities } = await conn.sendMessagePromise<{ entities: EntityIndexEntry[] }>({
+							type: 'config/entity_registry/list_for_display',
+						})
+						const registered = new Map(entities.map((e) => [e.ei, e]))
+
+						let labelled = 0
+						let already = 0
+						const skipped: string[] = []
+						for (const entityId of ctx.subs.getReferencedEntityIds()) {
+							const entry = registered.get(entityId)
+							if (!entry) {
+								skipped.push(entityId)
+								continue
+							}
+							const labels = entry.lb ?? []
+							if (labels.includes(labelId)) {
+								already++
+								continue
+							}
+							await conn.sendMessagePromise({
+								type: 'config/entity_registry/update',
+								entity_id: entityId,
+								labels: [...labels, labelId],
+							})
+							labelled++
+						}
+
+						ctx.log(
+							'info',
+							`Label "${name}": labelled ${labelled}, already had it ${already}, skipped ${skipped.length}` +
+								(skipped.length ? ` (not in the entity registry: ${skipped.join(', ')})` : ''),
+						)
+						return { labelled, already, skipped: skipped.length }
+					} catch (e) {
+						const msg = e instanceof Error ? e.message : JSON.stringify(e)
+						ctx.log('error', `Failed to label entities (an admin access token is required): ${msg}`)
+						throw e instanceof Error ? e : new Error(msg)
+					}
+				},
+			},
 		}
 	},
 	feedbacks: (ctx) => ({
 		entity_state_value: {
 			type: 'value',
 			name: 'Entity state or attribute value',
-			description: 'The state (or an attribute) of an entity, for use in expressions and text',
+			description:
+				'The state (or an attribute) of an entity, for use in expressions and text. To colour a button, use Compare entity state or attribute',
 			options: [EntityPicker(ctx.getState(), undefined), AttributePicker()],
 			callback: (feedback): JsonValue => {
 				subscribeEntityPicker(ctx, feedback)
@@ -141,7 +210,7 @@ export const genericDomain = defineDomain<GenericActions, GenericFeedbacks>({
 			unsubscribe: (feedback) => unsubscribeEntityPicker(ctx, feedback),
 		},
 		entity_compare: {
-			type: 'value',
+			type: 'boolean',
 			name: 'Compare entity state or attribute',
 			description: 'True when the entity value matches the comparison',
 			options: [
@@ -155,6 +224,8 @@ export const genericDomain = defineDomain<GenericActions, GenericFeedbacks>({
 				const actual = readValue(ctx.getStateObj()[feedback.options.entity_id], feedback.options.attribute)
 				return compareValues(actual, feedback.options.comparison, feedback.options.value)
 			},
+			defaultStyle: { color: 0x000000, bgcolor: 0x00ff00 },
+			showInvert: true,
 			unsubscribe: (feedback) => unsubscribeEntityPicker(ctx, feedback),
 		},
 	}),
