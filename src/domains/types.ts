@@ -37,6 +37,7 @@ export interface DomainContext {
 	getClient: () => Connection | undefined
 	getRegistries: () => Registries
 	subs: EntitySubscriptions
+	log: (level: 'debug' | 'info' | 'warn' | 'error', message: string) => void
 }
 
 /** Result of an action: what was called, and on which entities */

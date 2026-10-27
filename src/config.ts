@@ -60,7 +60,8 @@ function buildExplainer(entityIds: string[], lastCounts: LastFilterCounts | unde
 			'<b>Variable filtering.</b> Save your settings once to see live counts and a per-domain ' +
 			'breakdown of your Home Assistant install here. The fields below combine with <b>AND</b> — ' +
 			'leave any blank to skip that layer. Patterns support <code>*</code> (any chars), ' +
-			'<code>?</code> (one char), and comma separation.'
+			'<code>?</code> (one char), and comma separation. ' +
+			'Tip: the <b>Label used entities</b> action labels every entity your buttons use, so you can filter on that label.'
 		)
 	}
 

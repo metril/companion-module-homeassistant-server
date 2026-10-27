@@ -10,6 +10,11 @@ While developing the module, by using `yarn dev` the compiler will be run in wat
 
 ## Changes
 
+### v3.0.1
+
+- `Compare entity state or attribute` is now a normal boolean feedback with the standard style picker
+- New action `Label used entities`: adds a Home Assistant label (default `companion`) to every entity used by your buttons, so you can use it in "Include labels". Needs an admin token and HA 2024.4+
+
 ### v3.0.0
 
 **Breaking: requires Companion 5.1+ (Module API 2.2)**

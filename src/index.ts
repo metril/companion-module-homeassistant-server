@@ -73,6 +73,7 @@ export default class ControllerInstance extends InstanceBase<HassSchema> {
 		getClient: () => this.client,
 		getRegistries: () => this.registries,
 		subs: this.entitySubscriptions,
+		log: (level, message) => this.log(level, message),
 	}
 
 	/** Registry index of all entities, only loaded while server-side filtering is active */
