@@ -54,7 +54,7 @@ function fmt(n: number): string {
 	return n.toLocaleString('en-US')
 }
 
-function buildExplainer(entityIds: string[], lastCounts: LastFilterCounts | undefined): string {
+export function buildExplainer(entityIds: string[], lastCounts: LastFilterCounts | undefined): string {
 	if (entityIds.length === 0 || !lastCounts?.breakdown) {
 		return (
 			'<b>Variable filtering.</b> Save your settings once to see live counts and a per-domain ' +
@@ -70,6 +70,11 @@ function buildExplainer(entityIds: string[], lastCounts: LastFilterCounts | unde
 	const dropFromTotal = breakdown.totalCount - breakdown.afterDomains
 	const dropFromDomains = breakdown.afterDomains - breakdown.afterIncludes
 	const dropFromIncludes = breakdown.afterIncludes - breakdown.afterExcludes
+
+	const taxonomyRow =
+		breakdown.afterTaxonomy === undefined
+			? ''
+			: `<tr><td>After labels/areas/floors&nbsp;&nbsp;</td><td>${fmt(breakdown.afterTaxonomy)}</td><td><i>(−${fmt(breakdown.afterExcludes - breakdown.afterTaxonomy)})</i></td></tr>`
 
 	const summary =
 		'<b>Summary</b>' +
@@ -87,6 +92,7 @@ function buildExplainer(entityIds: string[], lastCounts: LastFilterCounts | unde
 		`<tr><td>After domain filter&nbsp;&nbsp;</td><td>${fmt(breakdown.afterDomains)}</td><td><i>(−${fmt(dropFromTotal)})</i></td></tr>` +
 		`<tr><td>After include patterns&nbsp;&nbsp;</td><td>${fmt(breakdown.afterIncludes)}</td><td><i>(−${fmt(dropFromDomains)})</i></td></tr>` +
 		`<tr><td>After exclude patterns&nbsp;&nbsp;</td><td>${fmt(breakdown.afterExcludes)}</td><td><i>(−${fmt(dropFromIncludes)})</i></td></tr>` +
+		taxonomyRow +
 		'</table>'
 
 	const sortedDomains = Object.entries(breakdown.perDomainCounts).sort((a, b) => b[1] - a[1])

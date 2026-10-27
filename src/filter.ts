@@ -95,6 +95,8 @@ export type FilterBreakdown = {
 	afterDomains: number
 	afterIncludes: number
 	afterExcludes: number
+	/** Count after label/area/floor filters; only set when one is configured */
+	afterTaxonomy?: number
 	perDomainCounts: Record<string, number>
 }
 
